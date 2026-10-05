@@ -1,0 +1,85 @@
+# =============================================================================
+# Configuracion central del sistema predictivo NBA (SportsDataIO)
+# Todos los parametros operativos del pipeline viven aqui.
+# =============================================================================
+
+season:
+  # Temporada activa (formato SportsDataIO: ano en que TERMINA la temporada, p.ej. 2026)
+  current: 2026
+  # Temporadas historicas usadas para entrenamiento (minimo 3 recomendado)
+  training_seasons: [2023, 2024, 2025, 2026]
+  # SeasonType: 1 = Regular, 2 = Preseason, 3 = Postseason, 4 = All-Star
+  season_types: [1, 3]
+
+api:
+  base_url: "https://api.sportsdata.io/v3/nba"
+  timeout_seconds: 30
+  max_retries: 4
+  backoff_seconds: 2
+  # Intervalo minimo entre llamadas (seg) para respetar los Call Interval del proveedor
+  min_call_interval: 1.0
+
+features:
+  rolling_windows: [5, 10, 20]        # ventanas de medias moviles (partidos)
+  lstm_sequence_length: 12            # partidos previos por secuencia LSTM
+  pace_possessions_estimate: true     # estimar posesiones si no hay PBP
+  min_games_history: 5                # minimo de partidos previos para emitir prediccion
+
+models:
+  catboost:
+    moneyline:
+      iterations: 800
+      learning_rate: 0.04
+      depth: 7
+      loss_function: "Logloss"
+      eval_metric: "Logloss"
+    totals:
+      iterations: 800
+      learning_rate: 0.04
+      depth: 7
+      loss_function: "RMSE"
+      eval_metric: "RMSE"
+  lstm_momentum:
+    hidden_size: 64
+    num_layers: 2
+    dropout: 0.30
+    learning_rate: 0.001
+    batch_size: 64
+    epochs: 40
+    patience: 6
+  bivariate_poisson:
+    lambda3_bounds: [0.0, 8.0]        # rango de busqueda del parametro de covarianza
+    shrinkage: 0.10                   # regularizacion hacia la media de liga
+  fusion_mlp:
+    hidden_sizes: [64, 32]
+    dropout: 0.30
+    learning_rate: 0.001
+    epochs: 60
+    patience: 8
+    calibration: "isotonic"           # isotonic | sigmoid (Platt)
+
+validation:
+  strategy: "walk_forward"            # validacion temporal estricta, sin leakage
+  n_splits: 6
+  min_train_games: 400
+  metrics_classification: ["logloss", "brier", "accuracy", "auc"]
+  metrics_regression: ["mae", "rmse"]
+
+staking:
+  bankroll_units: 100
+  kelly_fraction: 0.25                # Quarter-Kelly
+  max_stake_pct: 0.03                 # tope absoluto: 3% del bankroll por apuesta
+  min_edge: 0.03                      # edge minimo (prob_modelo - prob_implicita_devig)
+  min_ev: 0.02                        # EV minimo por unidad apostada
+  odds_format: "american"             # formato nativo del feed SportsDataIO
+
+telegram:
+  parse_mode: "Markdown"
+  max_message_length: 4000
+  send_no_bet_summary: true           # avisar aunque no haya value bets
+
+paths:
+  raw_data: "data/raw"
+  processed_data: "data/processed"
+  artifacts: "models/artifacts"
+  reports: "reports"

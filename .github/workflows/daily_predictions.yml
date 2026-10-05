@@ -1,0 +1,64 @@
+name: Daily NBA Predictions
+
+# Ejecuta el pipeline pregame todos los dias a las 16:00 UTC (~12:00 ET),
+# con los partidos, odds y lesiones actualizados, y envia el informe a Telegram.
+
+on:
+  schedule:
+    - cron: "0 16 * * *"        # 16:00 UTC diario
+  workflow_dispatch:            # ejecucion manual desde la pestana Actions
+    inputs:
+      target_date:
+        description: "Fecha objetivo (YYYY-MM-DD, vacio = hoy)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Descargar artefactos de modelos (ultimo entrenamiento OK)
+        uses: actions/download-artifact@v4
+        with:
+          name: model-artifacts
+          path: models/artifacts
+        continue-on-error: true
+
+      - name: Restaurar cache de datos historicos
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: nba-data-${{ github.run_number }}
+          restore-keys: nba-data-
+
+      - name: Ejecutar predicciones y notificar a Telegram
+        env:
+          SPORTSDATAIO_API_KEY: ${{ secrets.SPORTSDATAIO_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -n "${{ inputs.target_date }}" ]; then
+            python -m src.pipelines.predict_daily --date "${{ inputs.target_date }}"
+          else
+            python -m src.pipelines.predict_daily
+          fi
+
+      - name: Guardar informes del dia
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-reports-${{ github.run_number }}
+          path: reports/*.csv
+          if-no-files-found: ignore

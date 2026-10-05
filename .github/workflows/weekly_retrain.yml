@@ -1,0 +1,54 @@
+name: Weekly Model Retrain
+
+# Re-entrena todos los modelos con el historico actualizado cada domingo
+# 06:00 UTC, valida con walk-forward y publica los artefactos para el
+# workflow diario.
+
+on:
+  schedule:
+    - cron: "0 6 * * 0"         # domingos 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Restaurar cache de datos historicos
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: nba-data-${{ github.run_number }}
+          restore-keys: nba-data-
+
+      - name: Entrenar modelos (backfill + walk-forward + stacking)
+        env:
+          SPORTSDATAIO_API_KEY: ${{ secrets.SPORTSDATAIO_API_KEY }}
+        run: python -m src.pipelines.train
+
+      - name: Publicar artefactos de modelos
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-artifacts
+          path: models/artifacts/
+          retention-days: 14
+          overwrite: true
+
+      - name: Publicar informe de entrenamiento
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-report-${{ github.run_number }}
+          path: reports/training_report.json
+          if-no-files-found: error

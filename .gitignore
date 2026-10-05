@@ -1,0 +1,19 @@
+# Datos crudos y procesados (se regeneran desde la API)
+data/raw/
+data/processed/
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Artefactos de modelos (se generan en el workflow de reentrenamiento)
+models/artifacts/*.pkl
+models/artifacts/*.pt
+models/artifacts/*.json
+!models/artifacts/.gitkeep
+
+# Entorno
+.env
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+venv/
